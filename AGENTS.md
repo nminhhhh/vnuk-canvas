@@ -1,0 +1,3 @@
+# AGENTS.md — AGENT WORKSPACE DIRECTIVES
+
+@[Antigravity Rules](GEMINI.md)

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI + Gemini 3.8 Flash Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased custom-scrollbar">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center font-bold text-white shadow-lg shadow-sky-500/30">
+                    ⚡
+                </div>
+                <div>
+                    <span class="font-extrabold text-lg text-white tracking-tight">Antigravity</span>
+                    <span class="text-xs px-2 py-0.5 ml-1.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800 font-medium">FastAPI Core</span>
+                </div>
+            </div>
+
+            <!-- Header Right: System status & User Profile -->
+            <div class="flex items-center space-x-4">
+                <div id="aiStatusPill" class="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-slate-300">Model: <strong class="text-sky-400">Gemini 3.8 Flash (Low)</strong></span>
+                </div>
+                <a href="/api/v1/docs" target="_blank" class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded border border-slate-800 hover:border-slate-600 transition">
+                    📖 Swagger UI
+                </a>
+                <div id="userMenuContainer" class="flex items-center space-x-2">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Toast Notification Container -->
+        <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+        <!-- AUTH SCREEN (When not logged in) -->
+        <section id="authSection" class="max-w-md mx-auto my-12 bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-white tracking-tight mb-1">Xác thực hệ thống</h2>
+                <p class="text-xs text-slate-400">Đăng nhập hoặc đăng ký tài khoản để truy cập Task & Gemini AI</p>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="flex border-b border-slate-800 mb-6">
+                <button id="tabLoginBtn" onclick="switchAuthTab('login')" class="flex-1 pb-3 text-sm font-semibold border-b-2 border-sky-500 text-sky-400 transition">
+                    Đăng Nhập
+                </button>
+                <button id="tabRegisterBtn" onclick="switchAuthTab('register')" class="flex-1 pb-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+                    Tạo Tài Khoản
+                </button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Email</label>
+                    <input type="email" id="loginEmail" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition" placeholder="name@example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Mật khẩu</label>
+                    <input type="password" id="loginPassword" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition" placeholder="••••••••">
+                </div>
+                <button type="submit" id="loginSubmitBtn" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 font-semibold rounded-xl text-sm text-white shadow-lg shadow-sky-500/20 transition">
+                    Đăng Nhập
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Họ và tên</label>
+                    <input type="text" id="regFullName" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition" placeholder="Nguyễn Văn A">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Email</label>
+                    <input type="email" id="regEmail" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition" placeholder="name@example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Mật khẩu (Tối thiểu 6 ký tự)</label>
+                    <input type="password" id="regPassword" required minlength="6" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition" placeholder="••••••••">
+                </div>
+                <button type="submit" id="regSubmitBtn" class="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 font-semibold rounded-xl text-sm text-white shadow-lg shadow-emerald-500/20 transition">
+                    Tạo Tài Khoản & Tiếp Tục
+                </button>
+            </form>
+        </section>
+
+        <!-- DASHBOARD WORKSPACE (When logged in) -->
+        <section id="dashboardSection" class="hidden space-y-8">
+            
+            <!-- Hero User Welcome Banner -->
+            <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center space-x-2 mb-1">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span class="text-xs uppercase tracking-wider font-semibold text-emerald-400">Workspace Active</span>
+                    </div>
+                    <h1 class="text-2xl font-black text-white tracking-tight">
+                        Xin chào, <span id="welcomeUserName" class="text-sky-400">User</span>!
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="logout()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-rose-400 transition">
+                        Đăng Xuất
+                    </button>
+                </div>
+            </div>
+
+            <!-- Two Columns: Left Canvas LMS Hub, Right Gemini 3.8 Flash AI -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- LEFT COLUMN: VNUK Canvas LMS Hub (7 Cols) -->
+                <div class="lg:col-span-7 space-y-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                            <div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xl">🎓</span>
+                                    <h3 class="text-lg font-bold text-white">VNUK Canvas LMS Hub</h3>
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950 text-amber-400 border border-amber-800">
+                                        CANVAS API
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-1">Đồng bộ môn học, bài giảng theo tuần và hạn nộp bài tập</p>
+                            </div>
+                            <div id="canvasConnectionStatusBadge" class="flex items-center space-x-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs">
+                                <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                <span class="text-slate-300">Chưa kết nối</span>
+                            </div>
+                        </div>
+
+                        <!-- Connect Form & Help -->
+                        <div id="canvasConnectCard" class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+                            <form onsubmit="handleConnectCanvas(event)" class="space-y-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-300 mb-1">Canvas URL</label>
+                                        <input type="text" id="canvasUrlInput" value="https://canvas.vnuk.edu.vn" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 transition">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-300 mb-1">Canvas Token</label>
+                                        <input type="password" id="canvasTokenInput" placeholder="Dán mã Token..." required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 transition">
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button type="submit" id="canvasConnectBtn" class="flex-1 py-1.5 px-3 bg-amber-500 hover:bg-amber-600 font-semibold rounded-lg text-xs text-slate-950 transition">
+                                        🔗 Kết Nối
+                                    </button>
+                                    <button type="button" onclick="useCanvasDemoMode()" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-lg text-xs text-sky-400 transition" title="Trải nghiệm ngay với dữ liệu mẫu VNUK">
+                                        ⚡ Thử Demo
+                                    </button>
+                                </div>
+                            </form>
+                            <div class="mt-2.5 pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
+                                💡 <strong>Cách lấy Token:</strong> Canvas VNUK → <em>Account</em> → <em>Settings</em> → <em>Approved Integrations</em> → bấm <em>+ New Access Token</em>.
+                            </div>
+                        </div>
+
+                        <!-- Canvas Connected Workspace -->
+                        <div id="canvasWorkspaceArea" class="hidden space-y-5">
+                            <!-- Deadlines Bar -->
+                            <div class="bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-900/40 rounded-xl p-3.5">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center space-x-1.5">
+                                    <span>⏰ Hạn Chót Bài Tập Sắp Tới</span>
+                                </h4>
+                                <div id="canvasTodosContainer" class="space-y-2">
+                                    <div class="text-xs text-slate-400">Đang tải hạn nộp bài...</div>
+                                </div>
+                            </div>
+
+                            <!-- Courses Grid -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-white">
+                                        📚 Môn Học Đang Mở
+                                    </h4>
+                                    <button onclick="loadCanvasCourses()" class="text-[11px] text-sky-400 hover:underline">
+                                        🔄 Làm mới
+                                    </button>
+                                </div>
+                                <div id="canvasCoursesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Course Detail (Modules & Assignments Explorer) -->
+                    <div id="courseDetailCard" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h4 id="activeCourseTitle" class="text-sm font-bold text-white">Chi tiết môn học</h4>
+                                <p id="activeCourseCode" class="text-xs text-slate-400"></p>
+                            </div>
+                            <button onclick="closeCourseDetail()" class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800">
+                                Đóng
+                            </button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <!-- Modules / Lessons -->
+                            <div class="space-y-2">
+                                <h5 class="text-xs font-bold uppercase tracking-wider text-sky-400">📖 Bài Giảng & Slide Từng Tuần</h5>
+                                <div id="courseModulesList" class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1"></div>
+                            </div>
+
+                            <!-- Assignments -->
+                            <div class="space-y-2 pt-2 border-t border-slate-800">
+                                <h5 class="text-xs font-bold uppercase tracking-wider text-amber-400">📝 Bài Tập & Bài Kiểm Tra</h5>
+                                <div id="courseAssignmentsList" class="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Gemini 3.8 Flash (Low) AI Studio (5 Cols) -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col h-full">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                                    <span>✨ Gemini 3.8 Flash AI</span>
+                                </h3>
+                                <p class="text-xs text-slate-400">Trợ lý AI tốc độ cao (Low Latency Mode)</p>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="toggleApiKeyModal()" class="text-[11px] text-amber-400 hover:text-amber-300 font-medium px-2 py-0.5 rounded bg-slate-800 border border-slate-700 hover:border-amber-500/50 transition">
+                                    ⚙️ Cài Đặt Key
+                                </button>
+                                <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 text-amber-400 border border-amber-800">
+                                    FLASH LOW
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- API Key Settings Box -->
+                        <div id="apiKeyConfigBox" class="hidden bg-slate-950 border border-amber-900/50 rounded-xl p-3 mb-4 space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-white flex items-center space-x-1">
+                                    <span>🔑</span>
+                                    <span>Cấu hình GEMINI_API_KEY (.env)</span>
+                                </span>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sky-400 hover:underline text-[11px]">
+                                    Lấy Key miễn phí ↗
+                                </a>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="password" id="geminiApiKeyInput" placeholder="Dán mã AIzaSy... vào đây" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                                <button type="button" onclick="saveGeminiApiKey()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 font-semibold rounded-lg text-xs text-slate-950 transition">
+                                    Lưu vào .env
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Prompt Templates Shortcut -->
+                        <div class="flex flex-wrap gap-1.5 mb-3">
+                            <button onclick="setPromptTemplate('architecture')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition">
+                                🏗️ Thiết kế kiến trúc
+                            </button>
+                            <button onclick="setPromptTemplate('test')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition">
+                                🧪 Viết Unit Test
+                            </button>
+                            <button onclick="setPromptTemplate('refactor')" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition">
+                                ⚡ Tối ưu hiệu năng
+                            </button>
+                        </div>
+
+                        <!-- AI Prompt Input Form -->
+                        <form onsubmit="handleGenerateAI(event)" class="space-y-3 mb-4">
+                            <div>
+                                <textarea id="aiPromptInput" rows="3" required placeholder="Nhập yêu cầu cho Gemini 3.8 Flash..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition resize-none"></textarea>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-2 text-xs text-slate-400">
+                                    <span>Temp:</span>
+                                    <input type="range" id="aiTempSlider" min="0" max="1" step="0.1" value="0.7" class="w-16 h-1 bg-slate-700 rounded-lg cursor-pointer" oninput="document.getElementById('tempVal').innerText = this.value">
+                                    <span id="tempVal" class="text-slate-200">0.7</span>
+                                </div>
+                                <button type="submit" id="aiSubmitBtn" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-semibold rounded-xl text-xs text-white shadow-lg shadow-orange-500/20 transition flex items-center space-x-1.5">
+                                    <span id="aiBtnText">🚀 Sinh Văn Bản</span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- AI Response Box -->
+                        <div class="flex-1 flex flex-col min-h-[220px]">
+                            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                                <span>Phản hồi từ Gemini:</span>
+                                <button onclick="copyAIResponse()" id="copyAIBtn" class="text-[11px] text-sky-400 hover:underline hidden">
+                                    Sao chép
+                                </button>
+                            </div>
+                            <div id="aiResponseBox" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 leading-relaxed overflow-y-auto max-h-[300px] custom-scrollbar whitespace-pre-wrap">
+Sẵn sàng nhận lệnh! Chọn một mẫu prompt bên trên hoặc nhập nội dung bất kỳ để trải nghiệm tốc độ của Gemini 3.8 Flash (Low).
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-900 py-6 text-center text-xs text-slate-600">
+        Antigravity Master Orchestrator • Python FastAPI Modern Web Architecture • Powered by Google DeepMind
+    </footer>
+
+    <!-- Frontend JavaScript Logic -->
+    <script>
+        const API_BASE = '/api/v1';
+        let authToken = localStorage.getItem('access_token');
+        let currentUser = null;
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (authToken) {
+                fetchCurrentUser();
+            } else {
+                renderAuthSection();
+            }
+        });
+
+        // Toast Helper
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-rose-950 border-rose-800 text-rose-200' :
+                            type === 'success' ? 'bg-emerald-950 border-emerald-800 text-emerald-200' :
+                            'bg-slate-900 border-slate-700 text-slate-200';
+            toast.className = `pointer-events-auto px-4 py-3 rounded-xl border text-xs shadow-2xl transition-all duration-300 transform translate-y-2 opacity-0 flex items-center space-x-2 ${bgClass}`;
+            toast.innerHTML = `<span>${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'}</span><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Switch Auth Tabs
+        function switchAuthTab(tab) {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const tabLoginBtn = document.getElementById('tabLoginBtn');
+            const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+
+            if (tab === 'login') {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                tabLoginBtn.className = 'flex-1 pb-3 text-sm font-semibold border-b-2 border-sky-500 text-sky-400 transition';
+                tabRegisterBtn.className = 'flex-1 pb-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition';
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                tabLoginBtn.className = 'flex-1 pb-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition';
+                tabRegisterBtn.className = 'flex-1 pb-3 text-sm font-semibold border-b-2 border-emerald-500 text-emerald-400 transition';
+            }
+        }
+
+        // Handle Login
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginSubmitBtn');
+
+            btn.disabled = true;
+            btn.innerText = 'Đang xử lý...';
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    authToken = data.access_token;
+                    localStorage.setItem('access_token', authToken);
+                    showToast('Đăng nhập thành công!', 'success');
+                    await fetchCurrentUser();
+                } else {
+                    showToast(data.detail || 'Email hoặc mật khẩu không chính xác', 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối máy chủ', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Đăng Nhập';
+            }
+        }
+
+        // Handle Register
+        async function handleRegister(e) {
+            e.preventDefault();
+            const full_name = document.getElementById('regFullName').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const btn = document.getElementById('regSubmitBtn');
+
+            btn.disabled = true;
+            btn.innerText = 'Đang tạo tài khoản...';
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name, email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Đăng ký thành công! Đang tự động đăng nhập...', 'success');
+                    // Automatically log in
+                    const loginRes = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    const loginData = await loginRes.json();
+                    if (loginRes.ok) {
+                        authToken = loginData.access_token;
+                        localStorage.setItem('access_token', authToken);
+                        await fetchCurrentUser();
+                    }
+                } else {
+                    showToast(data.detail || 'Không thể tạo tài khoản', 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối máy chủ', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Tạo Tài Khoản & Tiếp Tục';
+            }
+        }
+
+        // Fetch Current User Profile
+        async function fetchCurrentUser() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                    currentUser = await res.json();
+                    renderDashboardSection();
+                } else {
+                    logout();
+                }
+            } catch (err) {
+                logout();
+            }
+        }
+
+        function renderAuthSection() {
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('dashboardSection').classList.add('hidden');
+            document.getElementById('userMenuContainer').innerHTML = '';
+        }
+
+        function renderDashboardSection() {
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            document.getElementById('welcomeUserName').innerText = currentUser.full_name || currentUser.email;
+
+            document.getElementById('userMenuContainer').innerHTML = `
+                <div class="flex items-center space-x-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span class="text-slate-300 font-medium">${currentUser.email}</span>
+                </div>
+            `;
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('access_token');
+            renderAuthSection();
+            showToast('Đã đăng xuất', 'info');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ================= GEMINI AI STUDIO =================
+        function setPromptTemplate(type) {
+            const input = document.getElementById('aiPromptInput');
+            if (type === 'architecture') {
+                input.value = 'Đề xuất kiến trúc database mở rộng cho tính năng thông báo Realtime với WebSockets trong FastAPI.';
+            } else if (type === 'test') {
+                input.value = 'Viết kịch bản Pytest cho endpoint xác thực JWT bao gồm cả trường hợp token hết hạn.';
+            } else if (type === 'refactor') {
+                input.value = 'Phân tích các giải pháp cache (Redis vs Memory) tối ưu cho FastAPI với Gemini 3.8 Flash.';
+            }
+            input.focus();
+        }
+
+        function autoFillWithAI() {
+            document.getElementById('aiPromptInput').value = 'Gợi ý 3 task kỹ thuật quan trọng nhất cần làm tiếp theo cho dự án FastAPI Fullstack Web App.';
+            handleGenerateAI(new Event('submit'));
+        }
+
+        async function handleGenerateAI(e) {
+            if (e) e.preventDefault();
+            const prompt = document.getElementById('aiPromptInput').value.trim();
+            if (!prompt) return;
+
+            const temp = parseFloat(document.getElementById('aiTempSlider').value);
+            const btn = document.getElementById('aiSubmitBtn');
+            const btnText = document.getElementById('aiBtnText');
+            const box = document.getElementById('aiResponseBox');
+            const copyBtn = document.getElementById('copyAIBtn');
+
+            btn.disabled = true;
+            btnText.innerText = 'Đang suy nghĩ...';
+            box.innerText = '⏳ Gemini 3.8 Flash (Low) đang phân tích và sinh nội dung...';
+            copyBtn.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/ai/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        temperature: temp,
+                        max_output_tokens: 1024
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    box.innerText = data.content;
+                    copyBtn.classList.remove('hidden');
+                    showToast('Gemini 3.8 Flash hoàn thành!', 'success');
+                } else {
+                    box.innerText = 'Lỗi: ' + (data.detail || 'Không thể sinh nội dung AI.');
+                    showToast('Lỗi gọi AI', 'error');
+                }
+            } catch (err) {
+                box.innerText = 'Lỗi kết nối máy chủ khi gọi Gemini AI.';
+                showToast('Lỗi kết nối', 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.innerText = '🚀 Sinh Văn Bản';
+            }
+        }
+
+        function copyAIResponse() {
+            const text = document.getElementById('aiResponseBox').innerText;
+            navigator.clipboard.writeText(text);
+            showToast('Đã sao chép phản hồi vào clipboard!', 'info');
+        }
+
+        // ================= GEMINI API KEY CONFIG =================
+        function toggleApiKeyModal() {
+            const box = document.getElementById('apiKeyConfigBox');
+            box.classList.toggle('hidden');
+        }
+
+        async function saveGeminiApiKey() {
+            const key = document.getElementById('geminiApiKeyInput').value.trim();
+            if (!key) {
+                showToast('Vui lòng nhập mã Gemini API Key', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/ai/configure-key`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: key })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Đã lưu API Key vào .env thành công!', 'success');
+                    document.getElementById('apiKeyConfigBox').classList.add('hidden');
+                    const pill = document.getElementById('aiStatusPill');
+                    if (pill) {
+                        pill.innerHTML = `
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="text-slate-300">Model: <strong class="text-emerald-400">Gemini 3.8 Flash (Online)</strong></span>
+                        `;
+                    }
+                } else {
+                    showToast(data.detail || 'Lỗi lưu key', 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối máy chủ', 'error');
+            }
+        }
+
+        // ================= VNUK CANVAS LMS HUB =================
+        let canvasToken = localStorage.getItem('canvas_token') || '';
+        let canvasUrl = localStorage.getItem('canvas_url') || 'https://canvas.vnuk.edu.vn';
+
+        // Check if canvas token already saved on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (canvasToken) {
+                document.getElementById('canvasTokenInput').value = canvasToken;
+                document.getElementById('canvasUrlInput').value = canvasUrl;
+                initCanvasWorkspace();
+            }
+        });
+
+        function useCanvasDemoMode() {
+            document.getElementById('canvasUrlInput').value = 'https://canvas.vnuk.edu.vn';
+            document.getElementById('canvasTokenInput').value = 'DEMO_VNUK';
+            handleConnectCanvas(new Event('submit'));
+        }
+
+        async function handleConnectCanvas(e) {
+            if (e) e.preventDefault();
+            const url = document.getElementById('canvasUrlInput').value.trim();
+            const token = document.getElementById('canvasTokenInput').value.trim();
+            const btn = document.getElementById('canvasConnectBtn');
+
+            if (!token) {
+                showToast('Vui lòng nhập Token Canvas', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Đang xác thực...';
+
+            try {
+                const res = await fetch(`${API_BASE}/canvas/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ canvas_url: url, access_token: token })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    canvasToken = token;
+                    canvasUrl = url;
+                    localStorage.setItem('canvas_token', canvasToken);
+                    localStorage.setItem('canvas_url', canvasUrl);
+                    showToast('Kết nối Canvas VNUK thành công!', 'success');
+                    initCanvasWorkspace(data.user);
+                } else {
+                    showToast(data.detail || 'Không thể kết nối Canvas', 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối máy chủ', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '🔗 Kết Nối';
+            }
+        }
+
+        function initCanvasWorkspace(user = null) {
+            document.getElementById('canvasWorkspaceArea').classList.remove('hidden');
+            const statusBadge = document.getElementById('canvasConnectionStatusBadge');
+            statusBadge.innerHTML = `
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span class="text-emerald-400 font-semibold">Đã kết nối: ${user ? user.name : 'Sinh Viên VNUK'}</span>
+            `;
+            loadCanvasCourses();
+            loadCanvasTodos();
+        }
+
+        async function loadCanvasCourses() {
+            const grid = document.getElementById('canvasCoursesGrid');
+            grid.innerHTML = '<div class="col-span-3 text-center py-6 text-slate-500 text-xs">Đang tải danh sách môn học từ Canvas VNUK...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/canvas/courses`, {
+                    headers: {
+                        'x-canvas-token': canvasToken,
+                        'x-canvas-url': canvasUrl
+                    }
+                });
+                if (res.ok) {
+                    const courses = await res.json();
+                    if (courses.length === 0) {
+                        grid.innerHTML = '<div class="col-span-3 text-center py-6 text-slate-400 text-xs">Không tìm thấy môn học nào đang mở.</div>';
+                        return;
+                    }
+                    grid.innerHTML = courses.map(c => `
+                        <div class="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-xl p-4 transition flex flex-col justify-between shadow-lg">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800">
+                                        ${escapeHtml(c.course_code || 'COURSE')}
+                                    </span>
+                                    <span class="text-[10px] text-slate-500">${escapeHtml(c.term || 'Học kỳ')}</span>
+                                </div>
+                                <h5 class="text-sm font-bold text-white mb-2 line-clamp-2">${escapeHtml(c.name)}</h5>
+                            </div>
+                            <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center space-x-2">
+                                <button onclick="openCourseDetail(${c.id}, '${escapeHtml(c.name)}', '${escapeHtml(c.course_code)}')" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 font-semibold rounded-lg text-xs text-sky-400 border border-slate-700 transition">
+                                    📖 Xem Bài Học
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                grid.innerHTML = '<div class="col-span-3 text-center py-6 text-rose-400 text-xs">Lỗi tải môn học Canvas</div>';
+            }
+        }
+
+        async function loadCanvasTodos() {
+            const container = document.getElementById('canvasTodosContainer');
+            try {
+                const res = await fetch(`${API_BASE}/canvas/todos`, {
+                    headers: {
+                        'x-canvas-token': canvasToken,
+                        'x-canvas-url': canvasUrl
+                    }
+                });
+                if (res.ok) {
+                    const todos = await res.json();
+                    if (todos.length === 0) {
+                        container.innerHTML = '<div class="col-span-3 text-xs text-slate-400">🎉 Tuyệt vời! Bạn không còn deadline nào sắp tới.</div>';
+                        return;
+                    }
+                    container.innerHTML = todos.slice(0, 3).map(t => {
+                        const dueDate = t.due_at ? new Date(t.due_at).toLocaleDateString('vi-VN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Không có hạn';
+                        return `
+                            <div class="bg-slate-900/80 border border-amber-900/40 rounded-lg p-3 text-xs flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wide block truncate">${escapeHtml(t.course_name)}</span>
+                                    <span class="font-semibold text-white mt-1 block truncate">${escapeHtml(t.assignment.name)}</span>
+                                </div>
+                                <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                                    <span>Hạn: <strong>${dueDate}</strong></span>
+                                    <span class="text-rose-400 font-bold">${t.assignment.points_possible || 100} điểm</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                container.innerHTML = '<div class="col-span-3 text-xs text-rose-400">Lỗi tải hạn chót bài tập</div>';
+            }
+        }
+
+        async function openCourseDetail(courseId, courseName, courseCode) {
+            const detailCard = document.getElementById('courseDetailCard');
+            detailCard.classList.remove('hidden');
+            document.getElementById('activeCourseTitle').innerText = courseName;
+            document.getElementById('activeCourseCode').innerText = courseCode;
+
+            const modulesList = document.getElementById('courseModulesList');
+            const assignmentsList = document.getElementById('courseAssignmentsList');
+
+            modulesList.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">Đang nạp bài giảng...</div>';
+            assignmentsList.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">Đang nạp bài tập...</div>';
+
+            detailCard.scrollIntoView({ behavior: 'smooth' });
+
+            // Fetch modules
+            fetch(`${API_BASE}/canvas/courses/${courseId}/modules`, {
+                headers: { 'x-canvas-token': canvasToken, 'x-canvas-url': canvasUrl }
+            }).then(r => r.json()).then(modules => {
+                if (modules.length === 0) {
+                    modulesList.innerHTML = '<div class="text-xs text-slate-400 py-3 text-center">Chưa có bài giảng nào được công bố.</div>';
+                    return;
+                }
+                modulesList.innerHTML = modules.map(m => `
+                    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+                        <div class="font-bold text-xs text-white mb-2">${escapeHtml(m.name)}</div>
+                        <div class="space-y-1.5 pl-2 border-l border-slate-700">
+                            ${m.items.map(item => `
+                                <div class="text-xs flex items-center justify-between text-slate-300 py-1 gap-2">
+                                    <span class="truncate">📄 ${escapeHtml(item.title)}</span>
+                                    <div class="flex items-center space-x-1 shrink-0">
+                                        <button onclick="summarizeLessonWithAI('${escapeHtml(item.title)}', '${escapeHtml(courseName)}')" class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 hover:bg-amber-900 border border-amber-800 text-[10px]" title="Dùng Gemini tóm tắt bài giảng">
+                                            ✨ Tóm Tắt
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            }).catch(() => {
+                modulesList.innerHTML = '<div class="text-xs text-rose-400">Lỗi tải bài giảng</div>';
+            });
+
+            // Fetch assignments
+            fetch(`${API_BASE}/canvas/courses/${courseId}/assignments`, {
+                headers: { 'x-canvas-token': canvasToken, 'x-canvas-url': canvasUrl }
+            }).then(r => r.json()).then(assignments => {
+                if (assignments.length === 0) {
+                    assignmentsList.innerHTML = '<div class="text-xs text-slate-400 py-3 text-center">Không có bài tập nào.</div>';
+                    return;
+                }
+                assignmentsList.innerHTML = assignments.map(a => `
+                    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-xs font-bold text-white">${escapeHtml(a.name)}</div>
+                            ${a.description ? `<p class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(a.description)}</p>` : ''}
+                            <div class="text-[10px] text-slate-500 mt-1">
+                                Hạn nộp: ${a.due_at ? new Date(a.due_at).toLocaleDateString('vi-VN') : 'Không có hạn'} • Điểm: ${a.points_possible || 100}
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${a.has_submitted ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'} shrink-0">
+                            ${a.has_submitted ? 'Đã nộp' : 'Chưa nộp'}
+                        </span>
+                    </div>
+                `).join('');
+            }).catch(() => {
+                assignmentsList.innerHTML = '<div class="text-xs text-rose-400">Lỗi tải bài tập</div>';
+            });
+        }
+
+        function closeCourseDetail() {
+            document.getElementById('courseDetailCard').classList.add('hidden');
+        }
+
+        function summarizeLessonWithAI(lessonTitle, courseName) {
+            document.getElementById('aiPromptInput').value = `Hãy tóm tắt ngắn gọn các khái niệm lý thuyết cốt lõi, công thức và bài học quan trọng nhất của bài: "${lessonTitle}" thuộc môn học "${courseName}" để tôi ôn thi đại học.`;
+            document.getElementById('aiPromptInput').scrollIntoView({ behavior: 'smooth' });
+            handleGenerateAI(new Event('submit'));
+        }
+    </script>
+</body>
+</html>
